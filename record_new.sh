@@ -63,6 +63,7 @@ function getfullurl(){
 	[[ $TYPE == "chaturbate" ]] && echo "https://chaturbate.com/${PART_URL}/"
 	[[ $TYPE == "bilibili"* ]] && echo "https://live.bilibili.com/${PART_URL}"
 	[[ $TYPE == "streamlink" ]] && echo "${PART_URL}"
+	[[ $TYPE == "missevan" ]] && echo "https://fm.missevan.com/live/${PART_URL}"
 }
 
 #检测直播状态,返回1为开播,返回0为未开播,在不为EXCEPT时保存PAGE
@@ -151,7 +152,11 @@ function getlivestatus(){
 		local LOCAL_PAGE=$(wget -q -O- "https://api.live.bilibili.com/room/v1/Room/get_info?room_id=${PART_URL}" | grep -o '"live_status":1')
 		if [[ -n $LOCAL_PAGE ]]; then STATUS=1; fi
 	fi
-	
+	if [[ $TYPE == "missevan" ]]; then
+		local LOCAL_PAGE=$(wget -q -O- "https://fm.missevan.com/api/v2/live/${PART_URL}" | grep -o '"open":1')
+		if [[ -n $LOCAL_PAGE ]]; then STATUS=1; fi
+	fi
+
 	[[ $EXCEPT != "except" ]] && PAGE=$LOCAL_PAGE
 	print "metadata ${EXCEPT} ${FULL_URL} status ${STATUS}"
 	return $STATUS
@@ -221,6 +226,11 @@ function prasepage(){
 		fi
 		#STREAM_URL=$(wget -q -O- "https://api.live.bilibili.com/room/v1/Room/playUrl?cid=${PART_URL}&qn=10000&platform=web" | grep -o "\"url\":\"[^\"]*\"" | head -n 1 | awk -F"\"" '{print $4}' | sed 's/\\u0026/\&/g'); fi
 		#STREAM_URL=$(curl -s --proxy ${STREAM_PROXY} "https://api.live.bilibili.com/room/v1/Room/playUrl?cid=${PART_URL}&qn=10000&platform=web" | grep -o "\"url\":\"[^\"]*\"" | grep "https://txy.live-play.acgvideo.com\|https://js.live-play.acgvideo.com\|https://ws.live-play.acgvideo.com" | head -n 1 | awk -F"\"" '{print $4}' | sed 's/\\u0026/\&/g')
+	fi
+	if [[ $TYPE == "missevan" ]]; then
+		DLNAME="missevan_${PART_URL}_$(date +"%Y%m%d_%H%M%S")"
+		FNAME="missevan_${PART_URL}_$(date +"%Y%m%d_%H%M%S").ts"
+		STREAM_URL=$(curl -s "https://fm.missevan.com/api/v2/live/${PART_URL}" | grep -o '"hls_pull_url":"http://d1-missevan104.bilivideo.com/live-bvc/[^"]*' | awk -F'\"' '{print $4}'  | sed 's/\\u0026/\&/g')
 	fi
 }
 
@@ -297,6 +307,13 @@ function startrecord(){
 	fi
 	if [[ $TYPE == "youtubeffmpeg" || $TYPE == "twitcastffmpeg" || $TYPE == "twitch" || $TYPE == "openrec" || $TYPE == "mirrativ" || $TYPE == "reality" || $TYPE == "chaturbate" || $TYPE == "streamlink" ]]; then
 		(ffmpeg -user_agent "Mozilla/5.0" -i "$STREAM_URL" -codec copy -f mpegts "${DIR}/${FNAME}" > "${DIR}/${FNAME}.log" 2>&1) &
+	fi
+	if [[ $TYPE == "missevan" ]]; then
+		if [[ -n $(command -v ffmpeg) ]]; then
+			(ffmpeg -user_agent "Mozilla/5.0" -i "$STREAM_URL" -codec copy -vn -f mpegts "${DIR}/${FNAME}" > "${DIR}/${FNAME}.log" 2>&1) &
+		else
+			(ffmpeg.exe -user_agent "Mozilla/5.0" -i "$STREAM_URL" -codec copy -vn -f mpegts "${DIR}/${FNAME}" > "${DIR}/${FNAME}.log" 2>&1) &
+		fi
 	fi
 	
 	echo $!
